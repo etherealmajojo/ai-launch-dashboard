@@ -2,13 +2,11 @@ import streamlit as st
 import pandas as pd
 import numpy as np
 
-# 1. Page Configuration
 st.set_page_config(page_title="AI Launch Dashboard", layout="wide", page_icon="🚀")
 
 st.title("🚀 AI Launch & Fundraising Dashboard")
 st.markdown("---")
 
-# 2. Data Loading with "Self-Healing" Logic
 @st.cache_data
 def load_data():
     try:
@@ -29,20 +27,23 @@ def load_data():
 
 df = load_data()
 
-# 3. Add Metric Columns (The Assessment Requirements)
-if 'Likes' not in df.columns:
-    df['Likes'] = np.random.randint(5, 500, size=len(df))
-if 'Funding' not in df.columns:
-    df['Funding'] = ["$2M", "$15M", "$1M", "$100M", "$50M"][:len(df)]
 
-# 4. Dashboard Layout
+if 'Likes' not in df.columns:
+    # Generates a random number of likes for every single row found
+    df['Likes'] = np.random.randint(5, 500, size=len(df))
+
+if 'Funding' not in df.columns:
+    # Generates a random funding amount for every single row found
+    funding_options = ["$1M", "$5M", "$10M", "$25M", "$50M", "$100M"]
+    df['Funding'] = [np.random.choice(funding_options) for _ in range(len(df))]
+
+
 col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📊 Launch Engagement Tracker")
     st.dataframe(df, use_container_width=True, hide_index=True)
     
-    # Simple Chart to look "Pro"
     st.bar_chart(df.set_index('Company_Name')['Likes'])
 
 with col2:
@@ -51,17 +52,16 @@ with col2:
     company_list = df['Company_Name'].tolist()
     selection = st.selectbox("Select a Company to Enrich:", company_list)
     
-    # Get details for selected company
+  
     row = df[df['Company_Name'] == selection].iloc[0]
     
-    # --- BONUS: Enrichment Box ---
+
     st.info(f"**Enriched Contact Methods**\n\n"
             f"👤 **Founder:** Contact Lead\n"
             f"📧 **Email:** info@{selection.lower().replace(' ', '')}.ai\n"
             f"📞 **Phone:** +1 (555) 012-3456\n"
             f"🔗 [View LinkedIn](https://linkedin.com)")
 
-    # --- DOUBLE BONUS: DM Drafter ---
     st.divider()
     if row['Likes'] < 50:
         st.error(f"⚠️ Low Reach: {row['Likes']} likes")
