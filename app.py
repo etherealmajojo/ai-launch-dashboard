@@ -59,7 +59,7 @@ with col2:
             f"🔗 [View LinkedIn Profile](https://linkedin.com)")
 
     # --- DOUBLE BONUS: DM Drafter ---
-    st.divider()
+    st.markdown("---")
     if row['Likes'] < 50:
         st.error(f"⚠️ Low Reach: {row['Likes']} likes")
         dm_text = f"Hey {selection} team! Saw your launch video. The tech looks incredible, but it looks like the algorithm didn't give it much love. Would love to chat about how our AI tools can help boost your distribution!"
