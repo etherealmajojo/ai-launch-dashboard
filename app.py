@@ -25,7 +25,15 @@ def load_data():
         }
         return pd.DataFrame(backup_data)
 
-df = load_data()
+def fix_arrow_dtypes(df):
+    """Convert LargeUtf8/large_string columns to standard string (Utf8).
+    Fixes 'Unrecognized type: LargeUtf8' error in Streamlit's Arrow serializer."""
+    for col in df.columns:
+        if pd.api.types.is_object_dtype(df[col]) or str(df[col].dtype) in ('large_string', 'string[large]'):
+            df[col] = df[col].astype(str)
+    return df
+
+df = fix_arrow_dtypes(load_data())
 
 # 3. Add Metric Columns (Dynamically scales to match all rows)
 if 'Likes' not in df.columns:
@@ -43,7 +51,7 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📊 Launch Engagement Tracker")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(fix_arrow_dtypes(df.copy()), use_container_width=True)
 
     # FIX: guard against missing/duplicate Company_Name before charting
     chart_df = df[['Company_Name', 'Likes']].dropna().drop_duplicates('Company_Name')
