@@ -42,7 +42,7 @@ col1, col2 = st.columns([2, 1])
 
 with col1:
     st.subheader("📊 Launch Engagement Tracker")
-    st.dataframe(df, use_container_width=True, hide_index=True)
+    st.dataframe(df, use_container_width=True)
     
     st.bar_chart(df.set_index('Company_Name')['Likes'])
 
