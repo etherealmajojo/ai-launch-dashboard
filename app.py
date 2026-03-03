@@ -316,20 +316,20 @@ with chart_col1:
         x=alt.X("Funding_USD:Q", title="Funding ($M)", scale=alt.Scale(type="log")),
         y=alt.Y("Total_Engagement:Q", title="Total Likes (X + LinkedIn)"),
         color=alt.Color("Category:N"),
-        tooltip=["Company", "Funding_USD", "Total_Engagement", "Category", "Stage"]
+        tooltip=["Company:N", "Funding_USD:Q", "Total_Engagement:Q", "Category:N", "Stage:N"]
     ).properties(height=300).interactive()
-    st.altair_chart(scatter, use_container_width=True)
+    st.altair_chart(scatter, width="stretch")
 
 with chart_col2:
     st.subheader("💰 Funding by Company")
-    bar_df = filtered[["Company", "Funding_USD"]].sort_values("Funding_USD", ascending=False)
+    bar_df = filtered[["Company", "Funding_USD", "Stage"]].sort_values("Funding_USD", ascending=False)
     bar = alt.Chart(bar_df).mark_bar(cornerRadiusTopLeft=4, cornerRadiusTopRight=4).encode(
         x=alt.X("Company:N", sort="-y", axis=alt.Axis(labelAngle=-40)),
         y=alt.Y("Funding_USD:Q", title="Funding ($M)"),
         color=alt.condition(alt.datum.Funding_USD > 100, alt.value("#7c3aed"), alt.value("#4f46e5")),
-        tooltip=["Company", "Funding_USD", "Stage"]
+        tooltip=["Company:N", "Funding_USD:Q", "Stage:N"]
     ).properties(height=300)
-    st.altair_chart(bar, use_container_width=True)
+    st.altair_chart(bar, width="stretch")
 
 st.subheader("🔥 X vs LinkedIn Engagement by Company")
 eng_df = filtered[["Company", "X_Likes", "LinkedIn_Likes"]].melt(
@@ -343,7 +343,7 @@ eng_chart = alt.Chart(eng_df).mark_bar().encode(
     )),
     tooltip=["Company", "Platform", "Likes"]
 ).properties(height=260)
-st.altair_chart(eng_chart, use_container_width=True)
+st.altair_chart(eng_chart, width="stretch")
 
 st.markdown("---")
 
@@ -368,7 +368,7 @@ def color_engagement(val):
     return ""
 
 styled = display_df.style.applymap(color_engagement, subset=["Total_Engagement", "X_Likes", "LinkedIn_Likes"])
-st.dataframe(styled, use_container_width=True, height=380)
+st.dataframe(styled, width="stretch", height=380)
 
 st.markdown("---")
 
