@@ -70,20 +70,52 @@ def fetch_x_likes(handle: str):
     return None
 
 
-def fetch_crunchbase_funding(org_slug: str):
-    """Fetch funding via Crunchbase API. Requires CRUNCHBASE_API_KEY in Streamlit secrets."""
-    key = os.getenv("CRUNCHBASE_API_KEY")
-    if not key:
-        return None
+# ── YC Directory cache (populated once per session) ──────────────
+_YC_CACHE: dict = {}
+
+def fetch_yc_funding(company_name: str):
+    """
+    Fetch funding + batch data from the public YC company directory.
+    No API key required — uses the same JSON endpoint the YC website uses.
+    Results are cached in _YC_CACHE for the session.
+    """
+    global _YC_CACHE
+    if company_name in _YC_CACHE:
+        return _YC_CACHE[company_name]
+
     try:
-        params = {"user_key": key, "field_ids": "funding_total"}
-        r = requests.get(f"https://api.crunchbase.com/api/v4/entities/organizations/{org_slug}", params=params, timeout=5)
+        query = company_name.lower().replace(" ", "%20")
+        url = f"https://api.ycombinator.com/v0.1/companies?q={query}&limit=5"
+        headers = {"User-Agent": "Mozilla/5.0 (compatible; dashboard/1.0)"}
+        r = requests.get(url, headers=headers, timeout=6)
+
         if r.status_code == 200:
-            amt = r.json().get("properties", {}).get("funding_total", {}).get("value_usd")
-            if amt:
-                return f"${amt/1_000_000:.1f}M"
+            results = r.json().get("companies", [])
+            for c in results:
+                # Match by name (case-insensitive)
+                if c.get("name", "").lower() == company_name.lower():
+                    funding_usd = c.get("totalFunding", 0) or 0
+                    batch = c.get("batch", "")
+                    result = {
+                        "funding_str": f"${funding_usd/1_000_000:.1f}M" if funding_usd >= 1_000_000
+                                       else f"${funding_usd/1_000:.0f}K" if funding_usd > 0
+                                       else None,
+                        "funding_usd": funding_usd / 1_000_000 if funding_usd else None,
+                        "batch": batch,
+                        "stage": c.get("stage", None),
+                        "description": c.get("oneLiner", None),
+                    }
+                    _YC_CACHE[company_name] = result
+                    return result
     except Exception:
         pass
+
+    _YC_CACHE[company_name] = None
+    return None
+
+
+def fetch_crunchbase_funding(org_slug: str):
+    """Kept for compatibility — Crunchbase free tier discontinued. Use fetch_yc_funding instead."""
     return None
 
 
@@ -270,12 +302,22 @@ def load_data():
         df = pd.DataFrame(RAW_DATA)
 
     for i, row in df.iterrows():
+        # Live X likes
         live_likes = fetch_x_likes(row["X_Handle"].lstrip("@"))
         if live_likes is not None:
             df.at[i, "X_Likes"] = live_likes
-        live_funding = fetch_crunchbase_funding(row["Crunchbase_Slug"])
-        if live_funding is not None:
-            df.at[i, "Funding"] = live_funding
+
+        # YC directory funding (free, no API key)
+        yc = fetch_yc_funding(row["Company"])
+        if yc:
+            if yc.get("funding_str"):
+                df.at[i, "Funding"] = yc["funding_str"]
+            if yc.get("funding_usd"):
+                df.at[i, "Funding_USD"] = float(yc["funding_usd"])
+            if yc.get("batch"):
+                df.at[i, "Batch"] = yc["batch"]
+            if yc.get("description"):
+                df.at[i, "Description"] = yc["description"]
 
     df["X_Likes"] = pd.to_numeric(df["X_Likes"], errors="coerce").fillna(0).astype(int)
     df["LinkedIn_Likes"] = pd.to_numeric(df["LinkedIn_Likes"], errors="coerce").fillna(0).astype(int)
@@ -290,7 +332,7 @@ def load_data():
 
 
 df = load_data()
-api_mode = bool(os.getenv("TWITTER_BEARER_TOKEN") or os.getenv("CRUNCHBASE_API_KEY"))
+api_mode = bool(os.getenv("TWITTER_BEARER_TOKEN"))
 
 # ─────────────────────────────────────────────
 # SIDEBAR
@@ -299,7 +341,7 @@ with st.sidebar:
     st.markdown("## 🛰️ AI Launch Intel")
     st.markdown(f"**Data Mode:** {'🟢 Live APIs' if api_mode else '🟡 CSV + Generated Enrichment'}")
     if not api_mode:
-        st.info("Add `TWITTER_BEARER_TOKEN` and `CRUNCHBASE_API_KEY` to Streamlit secrets to enable live data.")
+        st.info("Add `TWITTER_BEARER_TOKEN` to Streamlit secrets to enable live X engagement data.")
 
     st.markdown("---")
     st.markdown("### Filters")
@@ -313,7 +355,7 @@ with st.sidebar:
     st.markdown("---")
     st.markdown("### API Status")
     st.markdown(f"🐦 X API: {'✅ Connected' if os.getenv('TWITTER_BEARER_TOKEN') else '❌ Not configured'}")
-    st.markdown(f"📊 Crunchbase: {'✅ Connected' if os.getenv('CRUNCHBASE_API_KEY') else '❌ Not configured'}")
+    st.markdown("📊 YC Directory: ✅ No key needed")
     st.markdown(f"🔄 Last refresh: {datetime.now().strftime('%H:%M:%S')}")
     if st.button("🔄 Refresh Data"):
         st.cache_data.clear()
@@ -482,7 +524,7 @@ with mid:
     <hr style="border-color:#312e81;margin:12px 0">
     <p style="font-size:0.72rem;color:#6b7280">
         📌 Phone numbers require Hunter.io or Apollo.io API for live verification.<br>
-        Set <code>TWITTER_BEARER_TOKEN</code> + <code>CRUNCHBASE_API_KEY</code> in Streamlit secrets for live data.
+        Set <code>TWITTER_BEARER_TOKEN</code> in Streamlit secrets for live X data. YC funding loads automatically.
     </p>
 </div>
 """, unsafe_allow_html=True)
