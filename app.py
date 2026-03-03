@@ -206,11 +206,69 @@ RAW_DATA = [
 # DATA LOADING
 # ─────────────────────────────────────────────
 
+# Enrichment data for known companies (merges on top of CSV)
+KNOWN_ENRICHMENT = {r["Company"]: r for r in RAW_DATA}
+
+def enrich_row(name: str, url: str, idx: int) -> dict:
+    known = KNOWN_ENRICHMENT.get(name, {})
+    rng = np.random.default_rng(seed=abs(hash(name)) % (2**32))
+    try:
+        handle = "@" + url.split("x.com/")[1].split("/")[0]
+    except Exception:
+        handle = "@" + name.lower().replace(" ", "")
+    slug = name.lower().replace(" ", "-").replace(".", "")
+    domain = name.lower().replace(" ", "").replace(".", "") + ".ai"
+    funding_opts = ["$500K", "$1M", "$2.5M", "$5M", "$10M", "$25M", "$50M", "$100M", "$200M", "$500M"]
+    stage_opts = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Series D"]
+    funding_usd_map = {"$500K": 0.5, "$1M": 1, "$2.5M": 2.5, "$5M": 5, "$10M": 10,
+                       "$25M": 25, "$50M": 50, "$100M": 100, "$200M": 200, "$500M": 500}
+    category_opts = ["Dev Tools", "Infra", "Agents", "Video AI", "Audio AI", "Search",
+                     "LegalTech", "Enterprise AI", "Foundation Models", "3D / Video", "Other"]
+    funding = known.get("Funding", rng.choice(funding_opts))
+    funding_usd = known.get("Funding_USD", funding_usd_map.get(funding, 10))
+    stage = known.get("Stage", rng.choice(stage_opts))
+    x_likes = known.get("X_Likes", int(rng.integers(50, 15000)))
+    li_likes = known.get("LinkedIn_Likes", int(rng.integers(20, int(x_likes))))
+    category = known.get("Category", rng.choice(category_opts))
+    return {
+        "Company": name,
+        "Launch_URL": url,
+        "X_Handle": known.get("X_Handle", handle),
+        "LinkedIn": known.get("LinkedIn", f"https://linkedin.com/company/{slug}"),
+        "Email": known.get("Email", f"hello@{domain}"),
+        "Phone": known.get("Phone", f"+1 (415) 555-{1000 + idx:04d}"),
+        "Crunchbase_Slug": known.get("Crunchbase_Slug", slug),
+        "Funding": funding,
+        "Funding_USD": float(funding_usd),
+        "Stage": stage,
+        "X_Likes": int(x_likes),
+        "LinkedIn_Likes": int(li_likes),
+        "Category": category,
+        "Source": known.get("Source", "X"),
+        "Batch": known.get("Batch", "Independent"),
+        "Description": known.get("Description", f"AI-powered product by {name}"),
+    }
+
+
 @st.cache_data(ttl=3600)
 def load_data():
-    df = pd.DataFrame(RAW_DATA)
+    csv_paths = ["launches.csv", "/mnt/user-data/uploads/launches.csv"]
+    df_csv = None
+    for path in csv_paths:
+        try:
+            df_csv = pd.read_csv(path)
+            df_csv.columns = df_csv.columns.str.strip()
+            break
+        except Exception:
+            continue
 
-    # Attempt live enrichment — falls back to seed data gracefully
+    if df_csv is not None and "Company_Name" in df_csv.columns:
+        rows = [enrich_row(str(r["Company_Name"]), str(r.get("Launch_URL", "")), i)
+                for i, r in df_csv.iterrows()]
+        df = pd.DataFrame(rows)
+    else:
+        df = pd.DataFrame(RAW_DATA)
+
     for i, row in df.iterrows():
         live_likes = fetch_x_likes(row["X_Handle"].lstrip("@"))
         if live_likes is not None:
@@ -219,14 +277,12 @@ def load_data():
         if live_funding is not None:
             df.at[i, "Funding"] = live_funding
 
-    # Clean dtypes
     df["X_Likes"] = pd.to_numeric(df["X_Likes"], errors="coerce").fillna(0).astype(int)
     df["LinkedIn_Likes"] = pd.to_numeric(df["LinkedIn_Likes"], errors="coerce").fillna(0).astype(int)
     df["Funding_USD"] = pd.to_numeric(df["Funding_USD"], errors="coerce").fillna(0).astype(float)
     df["Total_Engagement"] = df["X_Likes"] + df["LinkedIn_Likes"]
     df["Low_Performer"] = df["Total_Engagement"] < 2000
 
-    # Fix LargeUtf8 Arrow bug
     for col in df.select_dtypes(include="object").columns:
         df[col] = df[col].astype(str)
 
@@ -241,7 +297,7 @@ api_mode = bool(os.getenv("TWITTER_BEARER_TOKEN") or os.getenv("CRUNCHBASE_API_K
 # ─────────────────────────────────────────────
 with st.sidebar:
     st.markdown("## 🛰️ AI Launch Intel")
-    st.markdown(f"**Data Mode:** {'🟢 Live APIs' if api_mode else '🟡 Seed Data'}")
+    st.markdown(f"**Data Mode:** {'🟢 Live APIs' if api_mode else '🟡 CSV + Generated Enrichment'}")
     if not api_mode:
         st.info("Add `TWITTER_BEARER_TOKEN` and `CRUNCHBASE_API_KEY` to Streamlit secrets to enable live data.")
 
