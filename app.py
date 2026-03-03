@@ -534,7 +534,18 @@ with right:
 
     if is_low:
         st.error(f"⚠️ Low engagement: {int(row['Total_Engagement']):,} total likes — DM recommended")
-        tone = st.selectbox("Message tone:", ["Casual & Direct", "Professional", "Value-led"], key="tone")
+
+        # Use session_state to persist tone selection independently of company change
+        tone_key = f"tone_{selected_company}"
+        if tone_key not in st.session_state:
+            st.session_state[tone_key] = "Casual & Direct"
+
+        tone = st.selectbox(
+            "Message tone:",
+            ["Casual & Direct", "Professional", "Value-led"],
+            index=["Casual & Direct", "Professional", "Value-led"].index(st.session_state[tone_key]),
+            key=tone_key
+        )
 
         if tone == "Casual & Direct":
             dm = (f"Hey {row['Company']} team 👋\n\n"
@@ -560,7 +571,8 @@ with right:
                   f"Given your recent launch I think there's a clear opportunity here. "
                   f"Happy to share a relevant case study.\n\nInterested in a quick chat?")
 
-        st.text_area("📝 Draft DM:", dm, height=220, key="dm_output")
+        # Use value= only (no key) so text always reflects current tone + company
+        st.text_area("📝 Draft DM:", value=dm, height=220)
         col_x, col_li = st.columns(2)
         with col_x:
             st.link_button("🐦 Open X DM", f"https://x.com/{row['X_Handle'].lstrip('@')}")
@@ -574,7 +586,8 @@ with right:
                       f"Seriously impressive for a {row['Stage']} company.\n\n"
                       f"We work with top-performing {row['Category']} companies and think there could "
                       f"be a strong fit here. Would love to explore a partnership.\n\nOpen to connecting?")
-        st.text_area("📝 Partnership Outreach:", partner_dm, height=180, key="partner_dm")
+        # Use value= only (no key) so text always reflects current company
+        st.text_area("📝 Partnership Outreach:", value=partner_dm, height=180)
         col_x2, col_li2 = st.columns(2)
         with col_x2:
             st.link_button("🐦 Open X DM", f"https://x.com/{row['X_Handle'].lstrip('@')}")
